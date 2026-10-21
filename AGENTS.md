@@ -25,6 +25,12 @@
   `ulimit -s 8192`): 10^8 operations under `state` (10 s), `reader` (2.6 s), a left-nested bind of 10^8 layers
   (14.6 s), a chain of 10^8 choice points under `all` (16 s) — linear, no stack growth. Before: CPS with closures grew
   the stack through Lean's `lean_apply_N` (not always a tail call), overflowing near 7*10^6.
+- AGAINST okay-simple's Free (Scala 3, JVM, `Probe/StackProbe.scala`, the same four shapes; JVM's second round,
+  warmed): n = 10^7 — `state` Lean 1.00 s / Scala 0.26 s, `reader` 0.27 / 0.06, left-nested bind 1.46 / 1.28,
+  chain of choices under `all` 1.29 / 8.14. n = 10^8 — `state` 10.0 / 2.96, `reader` 2.6 / 0.67, left 14.6 / 11.4,
+  choices 16.2 / OutOfMemory (12 GB heap). So: 4x behind on the sequential shapes (allocation: mimalloc + reference
+  counts against a bump allocator and a JIT inlining the clause), level on the left-nested bind, 6x ahead on the
+  deep handler, and no memory cliff.
 - Performance (2026-10-21, `sample` of `state`): ~45% allocation and freeing of the program's nodes (`At.here`,
   `op`, `bind`, a closure per step), ~14% `lean_apply_1` (a bind's `f`), ~6% `lean_apply_3` (the clause — the
   specialized loop still calls it, 4 call sites), ~18% the loop itself. Done: `op` (no `ret` closure, no call, no
