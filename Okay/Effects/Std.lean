@@ -21,10 +21,10 @@ def gets [In (State S) R] (f : S → A) : A ! R := do pure (f (← get))
 
 /-- the state from `s0`, the value and the state at the end -/
 def state [Split (State S) R Rest] (s0 : S) : A ! R → (A × S) ! Rest :=
-  Free.handleWith (E := State S) (fun a s => pure (a, s))
-    (fun s op k => match op with
-      | .get => k s s
-      | .put s' => k () s')
+  Free.answerWith (E := State S) (fun a s => pure (a, s))
+    (fun s op => match op with
+      | .get => (s, s)
+      | .put s' => ((), s'))
     s0
 
 /-! ## Reader -/
@@ -35,7 +35,7 @@ inductive Reader (E : Type) : Type → Type
 def ask [In (Reader E) R] : E ! R := perform Reader.ask
 
 def reader [Split (Reader E) R Rest] (e : E) : A ! R → A ! Rest :=
-  Free.answer (E := Reader E) pure fun | .ask => pure e
+  Free.answer (E := Reader E) pure fun | .ask => e
 
 /-! ## Writer -/
 
@@ -46,8 +46,8 @@ def tell [In (Writer W) R] (w : W) : Unit ! R := perform (Writer.tell w)
 
 /-- the value and what was told, in order -/
 def writer (W : Type) [Split (Writer W) R Rest] : A ! R → (A × List W) ! Rest :=
-  Free.handleWith (E := Writer W) (S := List W) (fun a ws => pure (a, ws.reverse))
-    (fun ws op k => match op with | .tell w => k () (w :: ws))
+  Free.answerWith (E := Writer W) (S := List W) (fun a ws => pure (a, ws.reverse))
+    (fun ws op => match op with | .tell w => ((), w :: ws))
     []
 
 /-! ## Error -/

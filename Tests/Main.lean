@@ -36,10 +36,10 @@ def echo [In Console R] : Unit ! R := do
   perform (Console.print s)
 
 def scripted [Split Console R Rest] (input : String) : A ! R → (A × List String) ! Rest :=
-  handleWith (E := Console) (S := List String) (fun a out => pure (a, out.reverse))
-    (fun out op k => match op with
-      | .readLine => k input out
-      | .print s => k () (s :: out))
+  answerWith (E := Console) (S := List String) (fun a out => pure (a, out.reverse))
+    (fun out op => match op with
+      | .readLine => (input, out)
+      | .print s => ((), s :: out))
     []
 
 /-- a handler resuming many times, and the state under it: each branch its own state -/

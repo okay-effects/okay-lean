@@ -104,12 +104,34 @@ def handle [s : Split E R Rest] (ret : A → B ! Rest)
     (clause : {X : Type} → E X → (X → B ! Rest) → B ! Rest) : A ! R → B ! Rest :=
   handleAt s.place ret clause
 
-/-- `E` answered in place: each operation a program of its answer, the rest going on -/
-def answer [Split E R Rest] (ret : A → B ! Rest) (clause : {X : Type} → E X → X ! Rest) : A ! R → B ! Rest :=
-  handle ret fun op k => clause op >>= k
+/-- `E` answered in place, each operation its answer at once, the rest going on: a LOOP — the rest is resumed by
+a tail call of the loop itself, so the stack does not grow with the operations -/
+def answer [s : Split E R Rest] (ret : A → B ! Rest) (clause : {X : Type} → E X → X) : A ! R → B ! Rest :=
+  go
+where
+  go : A ! R → B ! Rest
+    | .ret a => ret a
+    | impure op k =>
+      match s.place.take op with
+      | .inl e => go (k (clause e))
+      | .inr o => impure o fun x => go (k x)
 
-/-- `E` handled from its place with a state threaded through, `S`: `ret` of the value and the state at the end,
-`clause` of the state, an operation and the rest taking the answer and the new state -/
+/-- `E` answered in place with a state threaded through, `S`: each operation its answer and the new state at once;
+`ret` of the value and the state at the end. A loop, as `answer` -/
+def answerWith [s : Split E R Rest] (ret : A → S → B ! Rest) (clause : {X : Type} → S → E X → X × S) (s0 : S)
+    (prog : A ! R) : B ! Rest :=
+  go prog s0
+where
+  go : A ! R → S → B ! Rest
+    | .ret a, st => ret a st
+    | impure op k, st =>
+      match s.place.take op with
+      | .inl e => let (x, st') := clause st e; go (k x) st'
+      | .inr o => impure o fun x => go (k x) st
+
+/-- `E` handled deeply with a state threaded through, `S`: `ret` of the value and the state at the end, `clause` of
+the state, an operation and the rest `k` taking the answer and the new state — resumable any number of times, so
+not a loop: each resumption of `k` is a call (see `answerWith` for the loop) -/
 def handleWith [s : Split E R Rest] (ret : A → S → B ! Rest)
     (clause : {X : Type} → S → E X → (X → S → B ! Rest) → B ! Rest) (s0 : S) (prog : A ! R) : B ! Rest :=
   go prog s0

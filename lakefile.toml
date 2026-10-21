@@ -9,3 +9,7 @@ name = "Okay"
 [[lean_exe]]
 name = "test"
 root = "Tests.Main"
+
+[[lean_exe]]
+name = "stack"
+root = "Probe.Stack"

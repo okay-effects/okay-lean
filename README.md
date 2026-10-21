@@ -34,8 +34,8 @@ def greet [In (Reader String) R] [In (Writer String) R] [In (State Nat) R] : Nat
 | `E` is in `R` | `[In E R]`: `perform op` an operation of `E` as a program at `E`'s place |
 | `E` is in `R`, and `R` without it is `Rest` | `[Split E R Rest]`: what a handler takes, finding the first `E` of `R` |
 | a deep handler | `handle ret clause p`: the value's clause, an operation's with its rest `k` — resumable any number of times |
-| answering in place | `answer ret clause p`: each operation a program of its answer |
-| with a state threaded | `handleWith ret clause s0 p` |
+| answering in place | `answer ret clause p`: each operation its answer at once — a loop, the stack constant |
+| with a state threaded | `answerWith ret clause s0 p`, a loop; `handleWith` the deep form, `k` resumable |
 | at an explicit place | `handleAt place ret clause p` |
 | the value | `run p` for `p : A ! Pure` |
 
@@ -44,6 +44,12 @@ The standard effects, `Okay.Effects.Std`: `State` (`get`, `put`, `modify`, `gets
 `all`, `first`), `Abort` (`abort`; `optional`). Each handler takes its effect from anywhere in the row. The order of
 handlers is the semantics: `state 0 (all p)` is one state across the branches, `all (state 0 p)` a state per branch —
 `Tests/Main.lean` shows both, and an effect of one's own, `Console`, with its handler.
+
+## The stack
+
+`answer` and `answerWith` resume the rest by a tail call of their own loop, so `state`, `reader` and `writer` run
+10^8 operations on an 8 MB stack. A deep handler (`handle`) resumes `k` from its clause, a call per resumption. A
+left-nested bind, `foldl (· >>= ·)`, is quadratic in this representation (`Probe/Stack.lean` measures all of it).
 
 ## The laws
 
