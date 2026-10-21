@@ -77,6 +77,8 @@ def all [Split Choose R Rest] : A ! R → (List A) ! Rest :=
 where
   go {X : Type} : List X → (X → (List A) ! Rest) → (List A) ! Rest
     | [], _ => pure []
+    -- the last choice in tail position: no frame kept per choice point when there is one choice
+    | [x], k => k x
     | x :: xs, k => do pure ((← k x) ++ (← go xs k))
 
 /-- the first value, the choices tried in order -/
@@ -85,6 +87,7 @@ def first [Split Choose R Rest] : A ! R → (Option A) ! Rest :=
 where
   go {X : Type} : List X → (X → (Option A) ! Rest) → (Option A) ! Rest
     | [], _ => pure none
+    | [x], k => k x
     | x :: xs, k => do
       match ← k x with
       | some a => pure (some a)
@@ -119,7 +122,10 @@ theorem all_among (xs : List A) : Free.run (all (among xs : A ! [Choose])) = xs 
   show Free.run (all.go xs _) = xs
   induction xs with
   | nil => rfl
-  | cons x xs ih => simp [all.go] at ih ⊢; simp [ih]
+  | cons x xs ih =>
+    cases xs with
+    | nil => rfl
+    | cons y ys => simp [all.go] at ih ⊢; simp [ih]
 
 end Laws
 

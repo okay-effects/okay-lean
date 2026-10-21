@@ -31,7 +31,7 @@ def greet [In (Reader String) R] [In (Writer String) R] [In (State Nat) R] : Nat
 | an effect | a GADT of its operations indexed by the answer: `inductive State (S : Type) : Type → Type \| get : State S S \| put (s : S) : State S Unit` |
 | a row | a list of effects, the one handled next first: `[State Nat, Reader String]`; `Pure` is `[]` |
 | a program of the value `A` over the row `R` | `A ! R`, that is `Free R A`. Application binds tighter: `(List A) ! R` |
-| `E` is in `R` | `[In E R]`: `perform op` an operation of `E` as a program at `E`'s place |
+| `E` is in `R` | `[In E R]`: `perform op` an operation of `E` as a program, at `E`'s place in `R` |
 | `E` is in `R`, and `R` without it is `Rest` | `[Split E R Rest]`: what a handler takes, finding the first `E` of `R` |
 | a deep handler | `handle ret clause p`: the value's clause, an operation's with its rest `k` — resumable any number of times |
 | answering in place | `answer ret clause p`: each operation its answer at once — a loop, the stack constant |
@@ -50,7 +50,9 @@ handlers is the semantics: `state 0 (all p)` is one state across the branches, `
 Each interpreter is defined twice: a total reference in continuation-passing style, which the theorems are about,
 and the loop that runs it (`@[implemented_by]`), okay-simple's — a left-nested bind re-associated as data, every
 step a jump, a deep handler's `k` a trampoline. So 10^8 operations under `state`, a left-nested bind of 10^8 layers,
-a chain of 10^8 choice points under `all` all run on an 8 MB stack, in 3 to 16 seconds (`Probe/Stack.lean`).
+a chain of 10^8 choice points under `all` all run on an 8 MB stack, in 2.4 to 15 seconds, the sequential shapes in
+4 MB of memory (`Probe/Stack.lean`; `Probe/StackProbe.scala` is the same on okay-simple's Free, 3–4x faster on the
+JVM but for the left-nested bind, level).
 
 ## The laws
 
