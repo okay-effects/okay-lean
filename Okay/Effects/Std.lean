@@ -1,4 +1,5 @@
 import Okay.Effects.Free
+import Okay.Effects.Laws
 
 /-!
 # THE STANDARD EFFECTS, written once on the interface
@@ -114,11 +115,11 @@ theorem optional_abort : optional (abort : A ! [Abort]) = pure none := rfl
 theorem first_fail : first (fail : A ! [Choose]) = pure none := rfl
 
 /-- a choice among values is all of them -/
-theorem all_among (xs : List A) : all (among xs : A ! [Choose]) = pure xs := by
-  show all.go xs _ = pure xs
+theorem all_among (xs : List A) : Free.run (all (among xs : A ! [Choose])) = xs := by
+  show Free.run (all.go xs _) = xs
   induction xs with
   | nil => rfl
-  | cons x xs ih => simp [all.go, ih]; rfl
+  | cons x xs ih => simp [all.go, Free.handleAt.go] at ih ⊢; simp [ih]
 
 end Laws
 

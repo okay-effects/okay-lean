@@ -3,8 +3,8 @@
 okay-simple's `Free` monad in Lean 4: algebraic effects and handlers, a program DATA — a value, or an operation with
 its rest `k` — its effects a ROW in its type, a handler a function of a program to a program, taking its effect from
 anywhere in the row by a TYPED PLACE: no cast, no `Typeable`, dependent pattern matching tells a handler an operation
-is its own. And, Lean being Lean, the laws are theorems: `Free R` is a `LawfulMonad`, and what each standard handler
-makes of its operations is proved by computation.
+is its own. And, Lean being Lean, the laws are theorems: the monad laws up to delays, `run`'s equations, and what each standard
+handler makes of its operations.
 
 ```lean
 import Okay
@@ -47,15 +47,17 @@ handlers is the semantics: `state 0 (all p)` is one state across the branches, `
 
 ## The stack
 
-`answer` and `answerWith` resume the rest by a tail call of their own loop, so `state`, `reader` and `writer` run
-10^8 operations on an 8 MB stack. A deep handler (`handle`) resumes `k` from its clause, a call per resumption. A
-left-nested bind, `foldl (· >>= ·)`, is quadratic in this representation (`Probe/Stack.lean` measures all of it).
+As okay-simple: a program has `bind` and `delay` nodes; a handler is a loop over it in continuation-passing style,
+and every continuation it hands out is a trampoline, giving the rest back delayed for the loop outside to go on with.
+So 10^7 operations under `state`, a left-nested bind of 10^7 layers, a chain of 10^7 choice points under `all` all run
+on an 8 MB stack, in about a second each (`Probe/Stack.lean`). Nothing is `partial`.
 
 ## The laws
 
-`Okay/Effects/Laws.lean`: `bind_ret`, `bind_assoc`, `instance : LawfulMonad (Free R)`, `run_ret`. In `Std`:
-`state_get`, `state_put`, `reader_ask`, `writer_tell`, `attempt_raise`, `optional_abort`, `first_fail`, `all_among`.
-No `sorry` anywhere; the build is the check.
+`Okay/Effects/Laws.lean`: the monad laws up to steps after normalization — `Eqv`, two programs the same but for
+delays: `bind_assoc` by `rfl`, `pure_bind`, `bind_pure`; on `run` as equalities: `run_ret`, `run_bind`, `run_delay`,
+and `run_congr`. In `Std`: `state_get`, `state_put`, `reader_ask`, `writer_tell`, `attempt_raise`, `optional_abort`,
+`first_fail`, `all_among`. No `sorry` anywhere; the build is the check.
 
 ## Build and test
 
@@ -71,6 +73,7 @@ lake test    # Tests/Main.lean: 14 checks
 One of the [okay-effects](https://github.com/okay-effects) family; the specification is okay-simple's
 `okay.effects.free.Free` and its `Effectful` interface, in Scala. The differences are Lean's: an operation's answer
 type is the GADT's index, not an `answer` continuation in the operation; a row is a list, the handled-next effect at
-its head, where okay-simple's `R + E` puts it last; the laws are proved, not tested.
+its head, where okay-simple's `R + E` puts it last; the laws are proved, not tested; every interpreter is total, a structural loop in continuation-passing style with
+trampolined continuations, where okay-simple's loop re-associates binds as data.
 
 License: Apache 2.0.
