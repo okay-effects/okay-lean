@@ -119,7 +119,7 @@ theorem all_among (xs : List A) : Free.run (all (among xs : A ! [Choose])) = xs 
   show Free.run (all.go xs _) = xs
   induction xs with
   | nil => rfl
-  | cons x xs ih => simp [all.go, Free.handleAt.go] at ih ⊢; simp [ih]
+  | cons x xs ih => simp [all.go] at ih ⊢; simp [ih]
 
 end Laws
 

@@ -50,7 +50,7 @@ handlers is the semantics: `state 0 (all p)` is one state across the branches, `
 Each interpreter is defined twice: a total reference in continuation-passing style, which the theorems are about,
 and the loop that runs it (`@[implemented_by]`), okay-simple's — a left-nested bind re-associated as data, every
 step a jump, a deep handler's `k` a trampoline. So 10^8 operations under `state`, a left-nested bind of 10^8 layers,
-a chain of 10^8 choice points under `all` all run on an 8 MB stack, in 4 to 18 seconds (`Probe/Stack.lean`).
+a chain of 10^8 choice points under `all` all run on an 8 MB stack, in 3 to 16 seconds (`Probe/Stack.lean`).
 
 ## The laws
 

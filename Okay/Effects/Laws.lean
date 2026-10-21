@@ -29,6 +29,7 @@ theorem norm_norm (p : A ! R) : norm (norm p) = norm p := by
   induction m with
   | ret x => intro k; rfl
   | delay q ih => intro k; exact ih () k
+  | op o => intro k; rfl
   | impure op c ih => intro k; exact congrArg _ (funext fun x => ih x k)
   | bind m f ihm ihf =>
     intro k
@@ -44,6 +45,7 @@ theorem force_go (m : X ! Pure) : ∀ {A : Type} (k : X → A ! Pure),
   induction m with
   | ret x => intro A k; rfl
   | delay q ih => intro A k; exact ih () k
+  | op o => intro A k; exact nomatch o
   | impure op _ _ => intro A k; exact nomatch op
   | bind m f ihm ihf =>
     intro A k

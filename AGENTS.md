@@ -4,7 +4,8 @@
   proofs; `lake test` runs `Tests/Main.lean` (the `test` executable, lake's test driver). Both must pass before a
   commit; no `sorry` — Lean only warns about it, so grep the build output.
 - The specification is okay-simple (`~/work/my/okay-simple`, `core/free/.../Free.scala`, `Places.scala`, `Std.scala`):
-  a program is data (`Free.ret`, `Free.bind`, `Free.impure op k`, `Free.delay`), the row a `List Effect` with the handled-next effect FIRST
+  a program is data (`Free.ret`, `Free.bind`, `Free.op o` — an operation alone, what `perform` makes, okay-simple's `Perform` —
+  `Free.impure op k`, `Free.delay`), the row a `List Effect` with the handled-next effect FIRST
   (okay-simple's `R + E` has it last), places typed (`Place`, `Split` with `Rest` an `outParam`, `In`), handlers
   `handle` / `answer` / `handleWith` / `handleAt`. Port the next pieces the same way: `Delimited` (shift and
   reset), `Sub`/`embed`, `Yield`, `Fresh`, `Random`, `Store` are not here yet.
@@ -21,9 +22,16 @@
   not delayed; a deep handler's `k` is a trampoline, `delay fun _ => loop ...`, forced by the loop outside (as in
   okay-simple). Change the reference and the loop TOGETHER; the loop is unproved against the reference.
 - Measured (`Probe/Stack.lean`, `lake build stack`, `.lake/build/bin/stack <n> state|reader|left|choose`,
-  `ulimit -s 8192`): 10^8 operations under `state` (11.5 s), `reader` (3.6 s), a left-nested bind of 10^8 layers
-  (17 s), a chain of 10^8 choice points under `all` (18 s) — linear, no stack growth. Before: CPS with closures grew
+  `ulimit -s 8192`): 10^8 operations under `state` (10 s), `reader` (2.6 s), a left-nested bind of 10^8 layers
+  (14.6 s), a chain of 10^8 choice points under `all` (16 s) — linear, no stack growth. Before: CPS with closures grew
   the stack through Lean's `lean_apply_N` (not always a tail call), overflowing near 7*10^6.
+- Performance (2026-10-21, `sample` of `state`): ~45% allocation and freeing of the program's nodes (`At.here`,
+  `op`, `bind`, a closure per step), ~14% `lean_apply_1` (a bind's `f`), ~6% `lean_apply_3` (the clause — the
+  specialized loop still calls it, 4 call sites), ~18% the loop itself. Done: `op` (no `ret` closure, no call, no
+  bind re-association per `perform`: -25..35%); `Place.taken` (take in CPS, no `Sum`), `andThen` (no bind node for
+  a value rest), `@[specialize]` on the loops — these three measured nothing. Next, if ever: fewer nodes per
+  operation (an `At` path folded into `op`, a one-call-site clause so it inlines); ~100 ns per `state` operation
+  against okay-simple's ~15 ns on the JVM — allocation is the gap, not the loop.
 - Laws: the monad laws are equalities after normalization, each `rfl` (`pure_bind`, `bind_pure`, `bind_assoc`),
   `norm_norm`; on `run` as they stand (`run_ret`, `run_bind`, `run_delay`). A standard handler's single-operation law is `rfl` (`state_get`...);
   one with binds in it goes through `run` and `simp` (`all_among`).
