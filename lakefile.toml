@@ -1,0 +1,11 @@
+name = "okay-lean"
+version = "0.1.0"
+defaultTargets = ["Okay"]
+testDriver = "test"
+
+[[lean_lib]]
+name = "Okay"
+
+[[lean_exe]]
+name = "test"
+root = "Tests.Main"
