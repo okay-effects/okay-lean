@@ -128,7 +128,7 @@ okay's gateway, which puts a stdio worker on the network.
 
 ## A second checker of okay-proof's certificates
 
-[okay-proof](https://github.com/okay-effects/okay-proof)'s certificates — a proof as JSON, its theory carried by value
+okay-proof's certificates (okay-proof: the family's small prover in Scala 3, on okay-simple's effects) — a proof as JSON, its theory carried by value
 with a digest — are checked here a second time, by a kernel written again in Lean (`Okay.Check`): the same logic,
 the same exact decimals (rounded as `java.math.BigDecimal` rounds), the same polynomial forms, each of its 28 rules
 checked as okay-proof checks it, every step derived again, the theory's digest recomputed from the axioms as read
