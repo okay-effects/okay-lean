@@ -126,6 +126,23 @@ caller's `Reader`, a table call, a held value, a failure by name and the worker 
 worker's, as for Haskell's), CBOR and compression (the hello says so, and okay keeps the plain wire). TCP: through
 okay's gateway, which puts a stdio worker on the network.
 
+## A second checker of okay-proof's certificates
+
+[okay-proof](https://github.com/okay-effects/okay-proof)'s certificates — a proof as JSON, its theory carried by value
+with a digest — are checked here a second time, by a kernel written again in Lean (`Okay.Check`): the same logic,
+the same exact decimals (rounded as `java.math.BigDecimal` rounds), the same polynomial forms, each of its 28 rules
+checked as okay-proof checks it, every step derived again, the theory's digest recomputed from the axioms as read
+here, the claimed conclusion and hypotheses the result.
+
+```
+lake build okay-check
+.lake/build/bin/okay-check cert.json …     # one JSON line a file: ok, the theory, its digest, the conclusion — or why not
+```
+
+Two independent kernels, one in Scala, one in Lean, agree on every certificate okay-proof's differential test makes:
+806 of them — its proofs, from transfer decisions to the Omega test's 1016-step refutation, and their mutants —
+140 accepted and 666 refused by both. `Tests/certificates` keeps a few for this repository's own tests.
+
 ## Build and test
 
 Lean `v4.35.0`, pinned in `lean-toolchain` ([elan](https://github.com/leanprover/elan) installs it). No dependencies.
@@ -136,6 +153,7 @@ lake test                   # Tests/Main.lean: the effects' checks and the wire'
 lake build lean-worker      # the conformance worker, on pipes: .lake/build/bin/lean-worker
 scripts/ffm-worker.sh       # the same worker as an FFM library: .lake/build/lib/libokay-lean-worker.dylib (.so)
 lake build stack            # the measurements: .lake/build/bin/stack <n> state|reader|left|leftSplit|choose
+lake build okay-check       # okay-proof's certificates, checked a second time
 ```
 
 The FFM library is built with the system's C compiler (`cc`) beside `leanc`; macOS and Linux.

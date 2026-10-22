@@ -100,3 +100,16 @@
 - Modules under `Tests/` imported by an executable need a `lean_lib` (`Tests`, `globs = ["Tests.+"]`).
 - `partial def` needs `Inhabited` of its result: `instance [Inhabited A] : Inhabited (A ! R)` is in `Okay.Wire.Client`.
 - BSD `sed` has no `\b`: rename with Python.
+
+## The second checker (`Okay/Check/`, `Checker.lean`, 2026-10-22)
+
+- okay-proof's kernel written again (`~/work/my/okay-proof`, `Kernel.scala`, `Logic.scala`, `Linear.scala`,
+  `Certificate.scala` are the specification): every conclusion must be, AS DATA, the one okay-proof derives — the
+  rules compare formulas syntactically, so a polynomial's term must be built alike: atoms ordered by `Logic.key`
+  (length-prefixed names, compared by code points), coefficient 1 omitted, the constant last, left-nested sums and
+  products; fresh names `y1, y2, …` as okay-proof's `fresh`; decimals normalized (no trailing zero) and printed as
+  `stripTrailingZeros().toPlainString()`; rounding as Java's (HALF_UP away from zero).
+- A rule changed in okay-proof is changed here in the same commit pair: okay-proof's `DifferentialSuite` (it runs
+  `.lake/build/bin/okay-check`; OKAY_LEAN points here) fails otherwise. `Tests/certificates`: certificates okay-proof
+  wrote, checked by `lake test`; regenerate them with okay-proof's `Corpus` when the format changes.
+- Not proved here (yet): the rules' soundness against a semantics of formulas — step 4 of the plan.

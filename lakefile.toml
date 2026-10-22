@@ -22,3 +22,8 @@ root = "Probe.Stack"
 [[lean_exe]]
 name = "lean-worker"
 root = "Tests.ConformanceWorker"
+
+# a second checker of okay-proof's certificates
+[[lean_exe]]
+name = "okay-check"
+root = "Checker"

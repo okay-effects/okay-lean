@@ -1,5 +1,6 @@
 import Okay
 import Tests.WireTests
+import Tests.CheckTests
 
 open Okay.Effects Okay.Effects.Free
 
@@ -83,7 +84,7 @@ def main (args : List String) : IO UInt32 := do
       (run (attempt String (state 5 (do modify (· + 1); raise "no"; pure 0 : Nat ! [State Nat, Error String])))
         == .inl "no")
   ].mapM id
-  let rs := rs ++ wire
+  let rs := rs ++ wire ++ (← CheckTests.checks)
   if rs.all id then
     IO.println s!"{rs.length} checks passed"
     pure 0
