@@ -9,7 +9,10 @@ import okay.foreign.{ForeignWorker, WireConformance}
  *
  *   okay-lean$ lake build lean-worker && scripts/ffm-worker.sh
  *   okay$ cp ../okay-lean/conformance/TestLeanLinks.scala okay-rust/.jvm/src/test/scala/okay/rust/
- *   okay$ sbt "okayRustJVM/testOnly okay.rust.TestLean*"
+ *   okay$ sbt "set every Test / testOptions := Seq(Tests.Argument(TestFrameworks.MUnit, \"--include-tags=Live\"))" \
+ *             "okayRustJVM/testOnly okay.rust.TestLean*"
+ *
+ * The conformance tests are tagged `Live`, which okay's build excludes by default: hence the `set`.
  *
  * The worker's directory is OKAY_LEAN, by default ~/work/my/okay-lean. Programs as data only: no direct style, no
  * streams (they are a muxed worker's), so those tests are skipped as for Haskell.
