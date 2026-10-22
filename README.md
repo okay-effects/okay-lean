@@ -61,13 +61,60 @@ JVM but for the left-nested bind, level).
 `state_put`, `reader_ask`, `writer_tell`, `attempt_raise`, `optional_abort`, `first_fail`, `all_among`. No `sorry`
 anywhere; the build is the check.
 
+## The wire: okay, okay-kernel's protocol, other languages
+
+`Okay.Wire` puts Lean's effects on okay's wire — the protocol okay's far sides speak (Python, R, TypeScript, Haskell,
+Go, Rust), okay-kernel's `Done` / `Yield(op, k)` across a process or into the JVM's own:
+
+- **A worker** (`Worker`): Lean programs served by name. An operation a program performs with `call` — or a typed
+  effect sent with `remote` (`Wire` gives its operations' names and reads their answers) — goes to the host, which runs
+  it under its own handlers and continues the rest. The rest is a pure Lean function, so the host may continue it any
+  number of times (a `Choice` resumed twice), in this process or in another. A failure is a condition by name.
+- **Over pipes**: `def main := worker.serve` — okay's `ForeignWorker.speaking(Seq(binary))`.
+- **In the JVM's process, through FFM**: `scripts/ffm-worker.sh` links the worker's module, Lean's runtime and
+  `ffi/okay_exchange.c` into one library of okay's C ABI (`okay_exchange`, `okay_free`) — okay's
+  `ForeignWorker.inProcess(path)`. The worker is the library's `@[export okay_lean_worker] def worker (_ : Unit)`.
+- **Lean as the host** (`foreign`, `answering`, `runRemote`, `Link.spawn`): another's program run as a Lean program,
+  its operations answered by Lean's handlers — `all` over a far side's choices continues each far rest twice.
+
+```lean
+import Okay
+open Okay.Effects Okay.Wire
+
+inductive Shop : Type → Type
+  | priceOf (sku : String) : Shop Float
+  | discount (amount : Float) : Shop Float
+
+instance : Wire Shop where
+  name := fun op => match op with | .priceOf _ => "price_of" | .discount _ => "discount"
+  args := fun op => match op with | .priceOf sku => [.str sku] | .discount a => [.double a]
+  answer := fun op v => match op with
+    | .priceOf _ | .discount _ => match v.toFloat? with | some f => .ok f | none => .error "not a number"
+
+def total : Program
+  | [.str sku, qty] => Value.double <$> remote (E := Shop) (R := [Shop, Host]) (do
+      let price ← perform (Shop.priceOf sku)
+      perform (Shop.discount (price * (qty.toFloat?.getD 0))))
+  | _ => failWith "ValueError" "total takes a sku and a quantity"
+
+def main : IO Unit := Worker.serve ⟨[("total", total)]⟩
+```
+
+Checked by okay's own conformance body (`WireConformance`: multi-shot across the link, typed callbacks under the
+caller's `Reader`, a table call, a held value, a failure by name and the worker living on), over pipes and over FFM:
+`conformance/TestLeanLinks.scala`, run from okay's `okay-rust` tests. Not served: direct style and streams (a muxed
+worker's, as for Haskell), CBOR and compression (the hello says so, and okay keeps the plain wire). TCP: through okay's
+gateway, which puts a stdio worker on the network.
+
 ## Build and test
 
 Lean `v4.35.0` pinned in `lean-toolchain` ([elan](https://github.com/leanprover/elan) installs it).
 
 ```
 lake build   # the library and the proofs
-lake test    # Tests/Main.lean: 14 checks
+lake build lean-worker      # the conformance worker, on pipes
+scripts/ffm-worker.sh       # the same worker as an FFM library: .lake/build/lib/libokay-lean-worker.dylib
+lake test    # Tests/Main.lean: the effects' checks and the wire's, Lean as host of itself included
 ```
 
 ## The family

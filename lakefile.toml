@@ -6,6 +6,11 @@ testDriver = "test"
 [[lean_lib]]
 name = "Okay"
 
+# the tests' and the conformance worker's modules, imported by the executables below
+[[lean_lib]]
+name = "Tests"
+globs = ["Tests.+"]
+
 [[lean_exe]]
 name = "test"
 root = "Tests.Main"
@@ -13,3 +18,7 @@ root = "Tests.Main"
 [[lean_exe]]
 name = "stack"
 root = "Probe.Stack"
+
+[[lean_exe]]
+name = "lean-worker"
+root = "Tests.ConformanceWorker"

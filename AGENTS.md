@@ -65,3 +65,19 @@
   `norm_norm`; on `run` as they stand (`run_ret`, `run_bind`, `run_delay`). A standard handler's single-operation law is `rfl` (`state_get`...);
   one with binds in it goes through `run` and `simp` (`all_among`).
 - Commits: no Co-Authored-By lines.
+- THE WIRE (`Okay/Wire/`, 2026-10-22): okay's wire, the protocol of its far sides (okay's specs/remote-foreign.md,
+  polyglot-one-wire.md; the reference far side for pure rests is okay's Haskell `okay-py/src/main/resources/okay/hs/
+  Okay.hs` — follow it: its requests, conditions' kinds, hello). Own JSON (`Json`, a number its text), `Value` with
+  okay's tags (int past 2^53, a whole double `t:f`, nan, dict, frame), `Host` (requests by name; `fail` answers `Empty`:
+  Lean refuses `{X} : Host X` beside a constructor of a compound index), `Wire` + `remote` for typed effects, `step`
+  (reference + `@[implemented_by]` loop, like `run`), `Worker.serve1` (pure: state in, state out — `Free` is `Type 1`,
+  so the worker's state cannot live in an `IO.Ref`; the stdio loop passes it, the C shim keeps it), `foreign` /
+  `answering` / `runRemote` / `Link.spawn` for Lean as the host.
+- FFM: `scripts/ffm-worker.sh [Module]` — the module's import closure by its `import` lines, Lean's C by `leanc -c
+  -fPIC` (with the system's macOS version: leanc's says 99.0), the shim by the system's `cc` (leanc's clang has no
+  pthread.h), linked by `cc -shared` against Lean's STATIC archives (leanc -shared links @rpath libLake_shared, which a
+  JVM cannot find). Lean 4.35's module initializer is `initialize_<pkg>_<Module>(uint8_t builtin)`, no world; a
+  foreign thread must `lean_initialize_thread()` first (the shim does, per thread).
+- Conformance: `conformance/TestLeanLinks.scala` into okay's `okay-rust/.jvm/src/test/scala/okay/rust/`, then
+  `sbt "okayRustJVM/testOnly okay.rust.TestLean*"` (OKAY_LEAN = this directory). Do not commit it into okay unless
+  asked: okay is another repository.

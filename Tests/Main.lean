@@ -1,4 +1,5 @@
 import Okay
+import Tests.WireTests
 
 open Okay.Effects Okay.Effects.Free
 
@@ -52,7 +53,12 @@ def check (name : String) (ok : Bool) : IO Bool := do
   IO.println s!"{if ok then "ok  " else "FAIL"} {name}"
   pure ok
 
-def main : IO UInt32 := do
+def main (args : List String) : IO UInt32 := do
+  -- the far side of the wire's host test: this binary as a worker on its pipes
+  if args == ["--worker"] then
+    Conformance.worker.serve
+    return 0
+  let wire ← WireTests.checks (← IO.appPath).toString
   let rs ← [
     check "greet: reader, state, writer at their places" (greeting == (10, 13, ["hello, Ann"])),
     check "state alone" (run (state 1 (modify (· + 1) >>= fun _ => get (R := [State Nat]))) == (2, 2)),
@@ -77,6 +83,7 @@ def main : IO UInt32 := do
       (run (attempt String (state 5 (do modify (· + 1); raise "no"; pure 0 : Nat ! [State Nat, Error String])))
         == .inl "no")
   ].mapM id
+  let rs := rs ++ wire
   if rs.all id then
     IO.println s!"{rs.length} checks passed"
     pure 0
