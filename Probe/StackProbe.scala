@@ -14,6 +14,19 @@ object StackProbe {
     val impl = args.headOption.getOrElse("machine")
     val n = args.lift(1).map(_.toInt).getOrElse(100000000)
     val which = args.lift(2).getOrElse("all")
+    if (which == "leftSplit") {
+      // the left-nested bind timed apart: the program built, then run
+      for (_ <- 1 to 5) {
+        val t0 = System.nanoTime()
+        val run = impl match {
+          case "machine" => OnMachineShapes.leftBuilt(n)
+          case "free" => OnFreeShapes.leftBuilt(n)
+        }
+        val t1 = System.nanoTime(); val r = run(); val t2 = System.nanoTime()
+        println(f"$impl leftSplit $n: $r  build ${(t1 - t0) / 1e9}%.2f s, run ${(t2 - t1) / 1e9}%.2f s")
+      }
+      return
+    }
     val shapes: Seq[(String, () => Any)] = impl match {
       case "machine" => OnMachineShapes.shapes(n)
       case "free" => OnFreeShapes.shapes(n)
@@ -35,6 +48,9 @@ object OnMachineShapes {
   type RC[X] = Choose[X]
   def chain(i: Int, acc: Int): Int ! RC = if (i == 0) pure(acc) else among[Int, RC](List(1)).flatMap(x => chain(i - 1, acc + x))
 
+  /** the program built now, run when called */
+  def leftBuilt(n: Int): () => Any = { val p = leftNested(n); () => run(state(0)(p)) }
+
   def shapes(n: Int): Seq[(String, () => Any)] = Seq(
     "state" -> (() => run(state(0)(countState(n)))._1),
     "reader" -> (() => run(reader(1)(countReader(n, 0)))),
@@ -55,6 +71,9 @@ object OnFreeShapes {
     (0 until n).foldLeft(pure[Int, RS](0))((p, _) => p.flatMap(a => modify[Int, RS](_ + 1).map(_ => a + 1)))
   type RC[X] = Choose[X]
   def chain(i: Int, acc: Int): Int ! RC = if (i == 0) pure(acc) else among[Int, RC](List(1)).flatMap(x => chain(i - 1, acc + x))
+
+  /** the program built now, run when called */
+  def leftBuilt(n: Int): () => Any = { val p = leftNested(n); () => run(state(0)(p)) }
 
   def shapes(n: Int): Seq[(String, () => Any)] = Seq(
     "state" -> (() => run(state(0)(countState(n)))._1),

@@ -43,6 +43,15 @@
   The machine's choices were 2.85 s until okay-simple 2026-10-22: a handler of a one-effect row was moved to the end
   by a `Remap` level crossed and rebuilt per operation, and `k` resumed through a step record; fixed there (the
   handler holds its `Place`, `take` as in Free; `Resume` in the hot loop).
+- THE LEFT-NESTED BIND (2026-10-22, `stack <n> leftSplit`, Scala `<impl> <n> leftSplit`: build and run timed
+  apart). The program — 10^8 binds — is built whole before it runs and lives whole while it runs (~7.5 GB), unlike
+  the other shapes, made as they go. Lean: build ~8 ns, run ~127 ns a layer, the same from 10^4 to 10^8 — pure work,
+  no memory effect: `state`'s ~86 ns plus a bind and its re-association (a bind node and a closure per layer). The
+  JVM: ~50–80 ns a layer (machine), ~70–120 (Free) at 10^6, in the young generation; at 10^8 the live structure
+  makes it GC-bound — stop-the-world pauses 39% of the wall time (machine), 56% (Free), on G1, plus concurrent
+  marking on other cores — and the GC chosen moves it 2x (Free: G1 ~11.5 s, ParallelGC ~14.5 s, ParallelGC with an
+  8 GB young generation ~25 s). So "level with Free" at 10^8 is the JVM's GC, not Lean catching up: in work alone
+  Lean is ~1.5–2.5x behind here too. `List.range` is gone from the probe (`Nat.fold`): it cost nothing measurable.
 - `all` and `first` resume the LAST choice in tail position (`| [x], k => k x`): no frame per choice point when
   there is one choice, so a chain of 10^8 choices runs in 4 MB (before: 11.4 GB, 16 s). okay-simple's `all`/`first`
   got the same fix (a2d9216): 10^8 choices were OutOfMemory on a 12 GB heap, 1.1 s after.
