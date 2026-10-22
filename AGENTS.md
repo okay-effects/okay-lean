@@ -26,12 +26,20 @@
   `ulimit -s 8192`): 10^8 operations under `state` (10 s), `reader` (2.6 s), a left-nested bind of 10^8 layers
   (14.6 s), a chain of 10^8 choice points under `all` (16 s) — linear, no stack growth. Before: CPS with closures grew
   the stack through Lean's `lean_apply_N` (not always a tail call), overflowing near 7*10^6.
-- AGAINST okay-simple's Free (Scala 3, JVM, `Probe/StackProbe.scala`, the same four shapes; JVM's second round,
-  warmed; okay-simple at a2d9216, after `all`'s fix): n = 10^7 — `state` Lean 0.87 s / Scala 0.26 s, `reader`
-  0.23 / 0.06, left-nested bind 1.5 / 1.28, chain of choices under `all` 0.4 / 0.11. n = 10^8 — `state` 8.7 / 2.96,
-  `reader` 2.4 / 0.67, left 15.0 / 11.4, choices 4.1 / 1.1. So 3–4x behind on every shape but the left-nested bind
-  (level): allocation — mimalloc + reference counts against a bump allocator — and the JIT. Memory: Lean 4 MB on the
-  sequential shapes at any n (nodes freed as the loop goes), the left-nested bind holds its 10^8 nodes (7.4 GB).
+- AGAINST okay-simple (Scala 3, JDK 26, okay-simple edf1938), its MACHINE and its `Free`, each as it is
+  (`Probe/StackProbe.scala`: `<machine|free> <n> <shape>`, each pair in its OWN JVM — run in one sbt JVM the shapes
+  pollute each other's JIT profile and Free looked 2x slower — 5 rounds, median of rounds 2–5; Lean 5 runs, median).
+  n = 10^8, seconds:
+
+  | shape | Lean Free | Scala machine | Scala Free |
+  |---|---|---|---|
+  | `state` | 8.62 | 1.70 | 1.93 |
+  | `reader` | 2.36 | 0.79 | 0.85 |
+  | left-nested bind | 13.84 | 8.9 | 13.3 |
+  | chain of choices under `all` | 4.07 | 2.85 | 1.30 |
+
+  Lean is 4.5–5x behind on `state`, ~3x on `reader` and the choices against the faster of the two, level with Scala's
+  Free on the left-nested bind and 1.6x behind the machine there. Lean's runs vary under 2%, the JVM's up to 30%.
 - `all` and `first` resume the LAST choice in tail position (`| [x], k => k x`): no frame per choice point when
   there is one choice, so a chain of 10^8 choices runs in 4 MB (before: 11.4 GB, 16 s). okay-simple's `all`/`first`
   got the same fix (a2d9216): 10^8 choices were OutOfMemory on a 12 GB heap, 1.1 s after.
