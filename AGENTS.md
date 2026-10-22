@@ -36,10 +36,13 @@
   | `state` | 8.62 | 1.70 | 1.93 |
   | `reader` | 2.36 | 0.79 | 0.85 |
   | left-nested bind | 13.84 | 8.9 | 13.3 |
-  | chain of choices under `all` | 4.07 | 2.85 | 1.30 |
+  | chain of choices under `all` | 4.07 | 1.45 (was 2.85) | 1.29 |
 
   Lean is 4.5–5x behind on `state`, ~3x on `reader` and the choices against the faster of the two, level with Scala's
   Free on the left-nested bind and 1.6x behind the machine there. Lean's runs vary under 2%, the JVM's up to 30%.
+  The machine's choices were 2.85 s until okay-simple 2026-10-22: a handler of a one-effect row was moved to the end
+  by a `Remap` level crossed and rebuilt per operation, and `k` resumed through a step record; fixed there (the
+  handler holds its `Place`, `take` as in Free; `Resume` in the hot loop).
 - `all` and `first` resume the LAST choice in tail position (`| [x], k => k x`): no frame per choice point when
   there is one choice, so a chain of 10^8 choices runs in 4 MB (before: 11.4 GB, 16 s). okay-simple's `all`/`first`
   got the same fix (a2d9216): 10^8 choices were OutOfMemory on a 12 GB heap, 1.1 s after.
