@@ -20,7 +20,14 @@ def round : Fn := ⟨"round", [.dec, .int], .dec⟩
 def roundHalfUp : Fn := ⟨"roundHalfUp", [.dec, .int], .dec⟩
 def concat : Fn := ⟨"++", [.str, .str], .str⟩
 def length : Fn := ⟨"length", [.str], .int⟩
-def all : List Fn := [add, sub, mul, neg, div, mod, dec, dadd, dsub, dmul, ddiv, round, roundHalfUp, concat, length]
+/-- the first `n` characters, all if fewer, none if `n` < 0 -/
+def take : Fn := ⟨"take", [.str, .int], .str⟩
+/-- the last `n` characters, likewise -/
+def takeRight : Fn := ⟨"takeRight", [.str, .int], .str⟩
+/-- where `p` first stands in `a`, in characters from 0; -1 if nowhere; 0 for the empty text -/
+def indexOf : Fn := ⟨"indexOf", [.str, .str], .int⟩
+def all : List Fn := [add, sub, mul, neg, div, mod, dec, dadd, dsub, dmul, ddiv, round, roundHalfUp, concat, length,
+  take, takeRight, indexOf]
 end Fns
 
 inductive Val where
@@ -33,6 +40,12 @@ namespace Arithmetic
 open Formula
 
 private def scale (n : Int) : Option Int := if -1000 ≤ n ∧ n ≤ 1000 then some n else none
+
+/-- where `ps` first stands in `cs`, from `i` -/
+private def indexFrom (ps : List Char) : List Char → Nat → Int
+  | cs, i => if ps.isPrefixOf cs then i else match cs with
+    | [] => -1
+    | _ :: t => indexFrom ps t (i + 1)
 
 private def apply (fn : Fn) (vs : List Val) : Option Val :=
   match fn.name, vs with
@@ -51,6 +64,9 @@ private def apply (fn : Fn) (vs : List Val) : Option Val :=
   | "roundHalfUp", [.dec a, .int s] => (scale s).map (.dec <| a.setScale · .halfUp)
   | "++", [.str a, .str b] => some (.str (a ++ b))
   | "length", [.str a] => some (.int a.length)
+  | "take", [.str a, .int n] => some (.str (String.ofList (a.toList.take n.toNat)))
+  | "takeRight", [.str a, .int n] => some (.str (String.ofList (a.toList.drop (a.length - n.toNat))))
+  | "indexOf", [.str a, .str q] => some (.int (indexFrom q.toList a.toList 0))
   | _, _ => none
 
 partial def value : Term → Option Val
