@@ -143,6 +143,69 @@ Two independent kernels, one in Scala, one in Lean, agree on every certificate o
 806 of them — its proofs, from transfer decisions to the Omega test's 1016-step refutation, and their mutants —
 140 accepted and 666 refused by both. `Tests/certificates` keeps a few for this repository's own tests.
 
+## Control and audit of effects
+
+Every operation a program asks can pass a point where it is seen, changed, limited, refused or told — the program
+unchanged (`Okay.Effects.Intercept`, `Okay.Effects.Audit`):
+
+| | |
+|---|---|
+| `intercept ret clause p` | a handler whose effect STAYS in the row: `clause` gets each operation of `E` and the rest `k`; an operation of `E` it asks — the same, or another — goes to the next handler out. `interceptAt` at a place |
+| `around f p`, `observe f p` | okay-simple's: `f` gets the operation and `proceed` (asked again as it was); `observe` runs a program before each |
+| `trail describe p` | each operation of `E` asked again and told with its answer to a `Writer`: the trail beside the value |
+| `Sensitive E`, `sensitive o` | a sensitive effect as a program asks it: no handler can read it |
+| `Audited E`, `Audited.op` | the same as its handler takes it: no program can ask it |
+| `audit describe p`, `auditWith describe ret clause p` | the only way from the one to the other: each operation passed on by `pass` is told with its answer; the clause may change it, answer itself, refuse |
+
+The two sealed types are an `opaque` private constant: outside `Okay/Effects/Audit.lean` neither is a structure, so
+nothing takes a `Sensitive E` apart or makes an `Audited E`. A program asking `Pay` sensitively runs (`run` takes `[]`)
+only if an audit put it into a handler's reach; `Tests/InterceptTests.lean` checks the wrong programs fail to elaborate,
+each error by `#guard_msgs`.
+
+```lean
+import Okay
+open Okay.Effects Okay.Effects.Free
+
+inductive Pay : Type → Type
+  | transfer (to : String) (amount : Nat) : Pay String
+  | balance : Pay Nat
+
+-- the program: any row with the payments in it, knowing nothing of the audit
+def payments [In (Sensitive Pay) R] : Nat ! R := do
+  let _ ← sensitive (Pay.transfer "acct-1" 100)
+  let b ← sensitive Pay.balance
+  let _ ← sensitive (Pay.transfer "acct-2" 5000)
+  pure b
+
+-- the bank: an ordinary handler — of `Audited Pay`, which only an audit puts in the row
+def bank [Split (Audited Pay) R Rest] (b0 : Nat) : A ! R → A ! Rest :=
+  answerWith (E := Audited Pay) (fun a _ => pure a) (fun b a => match a.op with
+    | .transfer to n => (s!"ok:{to}", b - n)
+    | .balance => (b, b)) b0
+
+-- the policy: a transfer over the limit refused; whatever passes is told with its answer
+def limit [In (Error String) Rest] : {X : Type} → Pay X → ({Y : Type} → Pay Y → Y ! Rest) → (X → A ! Rest) → A ! Rest
+  | _, .transfer to n, pass, k => if n > 1000 then raise s!"refused: {n}" else pass (.transfer to n) >>= k
+  | _, o, pass, k => pass o >>= k
+
+def told : Pay X → X → String
+  | .transfer to n, r => s!"transfer {n} to {to} → {r}"
+  | .balance, b => s!"balance → {b}"
+
+#eval run (writer String (attempt String (bank 1000
+  (auditWith told pure limit (payments (R := [Sensitive Pay, Audited Pay, Error String, Writer String]))))))
+-- (Sum.inl "refused: 5000", ["transfer 100 to acct-1 → ok:acct-1", "balance → 900"])
+```
+
+Proved (`Okay/Effects/Laws.lean`, `Intercept.lean`, `Audit.lean`; `propext` and `Quot.sound` only):
+`interceptAt_pass` — an interceptor that asks every operation again is none, after normalization; `interceptAt_bind`,
+`around_bind`, `interceptAt_congr` — interception goes through a bind as a handler does, and every interpreter makes
+the same of programs equal after normalization (`Fold`); `observe_unseen` — an observer whose observations come to
+nothing to an interpreter is not seen by it; `trail_path` — the trail of a program of one path is its operations with
+their answers in the order asked, `trail_value` — and its value and state are the program's; `trail_step` — in
+general an entry each time an operation is ANSWERED, so under a handler resuming many times one per resumption
+(`trail_among`); `audit_sensitive`, `audit_tell` — the audit's trail of a path, operation by operation.
+
 ## Build and test
 
 Lean `v4.35.0`, pinned in `lean-toolchain` ([elan](https://github.com/leanprover/elan) installs it). No dependencies.
@@ -152,7 +215,7 @@ lake build                  # the library and the proofs
 lake test                   # Tests/Main.lean: the effects' checks and the wire's, Lean hosting itself included
 lake build lean-worker      # the conformance worker, on pipes: .lake/build/bin/lean-worker
 scripts/ffm-worker.sh       # the same worker as an FFM library: .lake/build/lib/libokay-lean-worker.dylib (.so)
-lake build stack            # the measurements: .lake/build/bin/stack <n> state|reader|left|leftSplit|choose
+lake build stack            # the measurements: .lake/build/bin/stack <n> state|reader|observe|left|leftSplit|choose
 lake build okay-check       # okay-proof's certificates, checked a second time
 ```
 
@@ -160,8 +223,7 @@ The FFM library is built with the system's C compiler (`cc`) beside `leanc`; mac
 
 ## Not here yet
 
-okay-simple's delimited control (`shift`, `reset`), `embed` and `Sub`, interception (`observe`, `around`), and the
-effects `Yield`, `Fresh`, `Random`, `Store`, `Lift`. An effect whose answer is a program needs a universe more:
+okay-simple's delimited control (`shift`, `reset`), `embed` and `Sub`, and the effects `Yield`, `Fresh`, `Random`, `Store`, `Lift`. An effect whose answer is a program needs a universe more:
 `Free R A` is in `Type 1`.
 
 ## The family

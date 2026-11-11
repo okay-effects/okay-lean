@@ -10,7 +10,7 @@
 - Commits: no Co-Authored-By lines. Public at github.com/okay-effects/okay-lean, `master`, its remote over HTTPS
   (this machine has no SSH key for GitHub). Listed in okay-simple's `docs/family.md`.
 - The specification is okay-simple (`~/work/my/okay-simple`: `core/free/.../Free.scala`, `Places.scala`, `Std.scala`).
-  Not ported yet: delimited control, `Sub`/`embed`, interception, `Yield`, `Fresh`, `Random`, `Store`, `Lift` — port
+  Not ported yet: delimited control, `Sub`/`embed`, `Yield`, `Fresh`, `Random`, `Store`, `Lift` — port
   them the same way.
 
 ## The design
@@ -37,6 +37,12 @@
 - Laws: the monad laws are equalities after normalization, each `rfl` (`pure_bind`, `bind_pure`, `bind_assoc`),
   `norm_norm`; on `run` as they stand (`run_ret`, `run_bind`, `run_delay`). A standard handler's single-operation law
   is `rfl` (`state_get` …); one with binds in it goes through `run` and `simp` (`all_among`).
+- Interception (`Okay/Effects/Intercept.lean`, `Audit.lean`): `interceptAt` is a fifth interpreter with a reference and
+  a loop (change together); it meets its own operation by `Place.same`/`own` (the place itself, so the row stays and
+  the clause's `perform` goes to the next handler out). `Fold` in `Laws.lean`: every `go` is one, so a law proved of a
+  fold holds for all. The seal of sensitive effects is a private `opaque` constant: do not make `Sensitive`/`Audited`
+  structures (a structure can be taken apart or built by anyone with `cases`/`⟨⟩`); the negative examples in
+  `Tests/InterceptTests.lean` pin the errors by `#guard_msgs` — Lean's message text changes with its version.
 - `all` and `first` resume the LAST choice in tail position (`| [x], k => k x`): no frame kept per choice point when
   there is one choice, so a chain of 10^8 choices runs in 4 MB (before: 11.4 GB). okay-simple got the same (a2d9216).
 
@@ -70,7 +76,7 @@
 
 ## Measuring
 
-- `lake build stack`, then `.lake/build/bin/stack <n> state|reader|left|leftSplit|choose` under `ulimit -s 8192`;
+- `lake build stack`, then `.lake/build/bin/stack <n> state|reader|observe|left|leftSplit|choose` under `ulimit -s 8192`;
   `Probe/StackProbe.scala` is the same on okay-simple (`<machine|free> <n> <shape>`): drop it into okay-simple's
   `bench/src/main/scala-3/okay/effects/bench/`, export the bench's classpath, and run EACH PAIR IN ITS OWN JVM (in one
   sbt JVM the shapes pollute each other's JIT profile: Free looked 2x slower), 5 rounds, the median of rounds 2–5;
