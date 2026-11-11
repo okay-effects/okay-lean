@@ -37,7 +37,10 @@ def main (args : List String) : IO Unit := do
   match args[1]? with
   | some "state" => IO.println (run (state 0 (countState (R := [State Nat]) n))).2
   | some "reader" => IO.println (run (reader 1 (countReader (R := [Reader Nat]) n 0)))
+  -- every operation of the state through an interceptor that asks it again
+  | some "observe" =>
+    IO.println (run (state 0 (observe (E := State Nat) (fun _ => pure ()) (countState (R := [State Nat]) n)))).2
   | some "choose" => IO.println (run (all (chain (R := [Choose]) n 0)))
   | some "leftSplit" => leftSplit n
   | some "left" => IO.println (run (state 0 (leftNested (R := [State Nat]) n)))
-  | _ => IO.println "state|reader|left"
+  | _ => IO.println "state|reader|observe|left|leftSplit|choose"
