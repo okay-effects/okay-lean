@@ -123,6 +123,31 @@ def take : {E : Effect} → {R Rest : Row} → {E2 : Effect} → {Rest2 : Row} �
     | .mine => mine o
     | .theirs r => theirs (.init r) o
 
+/-- is an operation's place `pl` the place `p`: `yes`, and then its effect, its rest and the place itself are `p`'s —
+what an interceptor needs to ask the operation again where it was -/
+inductive Same {E : Effect} {R Rest : Row} (p : Place E R Rest) :
+    {E2 : Effect} → {Rest2 : Row} → Place E2 R Rest2 → Type 1
+  | yes : Same p p
+  | no {E2 : Effect} {Rest2 : Row} {pl : Place E2 R Rest2} : Same p pl
+
+def same : {E : Effect} → {R Rest : Row} → {E2 : Effect} → {Rest2 : Row} →
+    (p : Place E R Rest) → (pl : Place E2 R Rest2) → Same p pl
+  | _, _, _, _, _, last, last => .yes
+  | _, _, _, _, _, last, init _ => .no
+  | _, _, _, _, _, init _, last => .no
+  | _, _, _, _, _, init p, init q =>
+    match p.same q with
+    | .yes => .yes
+    | .no => .no
+
+/-- an operation at `pl`, met by the interceptor of `E` at `p`: `E`'s own at `p` — `mine` —, or not, `theirs`: it
+stays where it is, the row is the same -/
+@[inline] def own {β : Type 1} {X : Type} {E : Effect} {R Rest : Row} {E2 : Effect} {Rest2 : Row}
+    (p : Place E R Rest) (pl : Place E2 R Rest2) (o : E2 X) (mine : E X → β) (theirs : Unit → β) : β :=
+  match p.same pl, o with
+  | .yes, e => mine e
+  | .no, _ => theirs ()
+
 end Place
 
 /-- `E` is in `R`, and `R` without it is `Rest` — found: the first `E` of `R` -/
@@ -306,6 +331,50 @@ where
 @[inline] def answerWith [s : Split E R Rest] (ret : A → S → B ! Rest) (clause : {X : Type} → S → E X → X × S) (s0 : S) :
     A ! R → B ! Rest :=
   answerWithAt s.place ret clause s0
+
+/-! ## Interceptors: a handler whose effect stays in the row -/
+
+/-- `interceptAt`, as it runs: the loop -/
+@[specialize] unsafe def interceptAtImpl (p : Place E R Rest) (ret : A → B ! R)
+    (clause : {X : Type} → E X → (X → B ! R) → B ! R) : A ! R → B ! R
+  | .ret a => ret a
+  | .delay q => interceptAtImpl p ret clause (q ())
+  | .op pl o => p.own pl o (fun e => clause e ret) (fun _ => .impure pl o ret)
+  | .impure pl o c =>
+    p.own pl o (fun e => clause e fun x => .delay fun _ => interceptAtImpl p ret clause (c x))
+      (fun _ => .impure pl o fun x => interceptAtImpl p ret clause (c x))
+  | .bind m f =>
+    match m with
+    | .ret x => interceptAtImpl p ret clause (f x)
+    | .delay q => interceptAtImpl p ret clause (.bind (q ()) f)
+    | .bind m2 f2 => interceptAtImpl p ret clause (.bind m2 fun y => .bind (f2 y) f)
+    | .op pl o => p.own pl o (fun e => clause e fun x => .delay fun _ => interceptAtImpl p ret clause (f x))
+        (fun _ => .impure pl o fun x => interceptAtImpl p ret clause (f x))
+    | .impure pl o c =>
+      p.own pl o (fun e => clause e fun x => .delay fun _ => interceptAtImpl p ret clause ((c x).andThen f))
+        (fun _ => .impure pl o fun x => interceptAtImpl p ret clause ((c x).andThen f))
+
+/-- `E` INTERCEPTED at its place `p` in `R`: each operation of `E` at `p` given to `clause` with its rest `k`, still
+intercepted, resumable any number of times. The row stays `R`, `E` in it: the clause runs outside the interception,
+so an operation of `E` it asks — the one it was given, or another — goes to `E`'s handler further out. An operation at
+another place passes as it is -/
+@[implemented_by interceptAtImpl, specialize] def interceptAt (p : Place E R Rest) (ret : A → B ! R)
+    (clause : {X : Type} → E X → (X → B ! R) → B ! R) (prog : A ! R) : B ! R :=
+  go prog ret
+where
+  go {X : Type} : X ! R → (X → B ! R) → B ! R
+    | .ret x, k => k x
+    | .delay q, k => go (q ()) k
+    | .bind m f, k => go m fun x => go (f x) k
+    | .op pl o, k => p.own pl o (fun e => clause e fun x => .delay fun _ => k x) (fun _ => .impure pl o k)
+    | .impure pl o c, k =>
+      p.own pl o (fun e => clause e fun x => .delay fun _ => go (c x) k)
+        (fun _ => .impure pl o fun x => go (c x) k)
+
+/-- `E` intercepted where it is in `R`: the place `perform` asks at, so the clause's `perform` goes on from there -/
+@[inline] def intercept [i : In E R] (ret : A → B ! R) (clause : {X : Type} → E X → (X → B ! R) → B ! R) :
+    A ! R → B ! R :=
+  interceptAt i.place ret clause
 
 end Free
 end Okay.Effects
