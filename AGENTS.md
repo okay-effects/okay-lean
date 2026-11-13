@@ -1,5 +1,113 @@
 # okay-lean — notes for agents
 
+## For agents writing code with okay-lean
+
+okay-lean is algebraic effects and handlers in Lean 4: okay-simple's `Free` monad ported. A program is data,
+`A ! R` (`Free R A`), its effects a row `R` in its type; handlers take an effect out of the row by a typed place; the
+laws are theorems. Programs also speak okay's wire (worker over pipes or FFM; Lean as host).
+
+Getting it: the README gives no Lake `require` line. It says: Lean `v4.35.0` pinned in `lean-toolchain` (elan
+installs it), no dependencies, `lake build` / `lake test` in the repository. The package is `okay-lean`, the library
+`Okay` (`import Okay`), branch `master`, no release tag. A Lake dependency would be the standard form (not from the
+README, untested): `[[require]]` `name = "okay-lean"`, `git = "https://github.com/okay-effects/okay-lean"`,
+`rev = "master"`; use the same Lean toolchain.
+
+### The model: effect, program, handler, run (compiled and run against the library)
+
+```lean
+import Okay
+open Okay.Effects Okay.Effects.Free
+
+-- an effect: a GADT of its operations, indexed by each one's answer
+inductive Accounts : Type → Type
+  | balance (who : String) : Accounts Nat
+  | move (src dst : String) (n : Nat) : Accounts Unit
+
+-- a program: any row R holding Accounts and Error String, at any place
+def transfer [In Accounts R] [In (Error String) R] (src dst : String) (n : Nat) : Unit ! R := do
+  let b ← perform (Accounts.balance src)
+  if b < n then raise s!"{src} has less than {n}"
+  perform (Accounts.move src dst n)
+
+-- a handler: takes Accounts out of the row; here in memory, a state threaded
+def inMemory [Split Accounts R Rest] (m0 : List (String × Nat)) : A ! R → (A × List (String × Nat)) ! Rest :=
+  answerWith (E := Accounts) (S := List (String × Nat)) (fun a m => pure (a, m))
+    (fun m op => match op with
+      | .balance who => ((m.lookup who).getD 0, m)
+      | .move src dst n =>
+        let get := fun w => (m.lookup w).getD 0
+        ((), m.map fun (w, v) => if w == src then (w, get src - n) else if w == dst then (w, v + n) else (w, v)))
+    m0
+
+-- run: every effect handled, then `run` on `A ! []`
+#eval run (attempt String (inMemory [("ann", 100), ("bob", 0)]
+  (transfer (R := [Accounts, Error String]) "ann" "bob" 70)))
+-- Sum.inr ((), [("ann", 30), ("bob", 70)])
+```
+
+- Handlers: `handle ret clause p` (deep, `k` resumable any number of times), `answer` (in place), `answerWith` /
+  `handleWith` (a state threaded), `…At` forms at an explicit `Place`. `[In E R]` to perform, `[Split E R Rest]` to
+  handle. Standard (`Okay.Effects.Std`): `State`/`state`, `Reader`/`reader`, `Writer`/`writer W`,
+  `Error`/`attempt E`, `Choose` (`among`, `fail`, `guard`)/`all`,`first`, `Abort`/`optional`.
+- Real I/O at the entry: the effects are pure data, so the host answers the last remaining effect in `IO`,
+  `Okay.Wire.runIO (h : {X : Type} → E X → IO X) (p : A ! [E])`:
+
+```lean
+def accountsIO : {X : Type} → Accounts X → IO X
+  | _, .balance _ => pure 100
+  | _, .move src dst n => IO.println s!"move {n} {src} -> {dst}"
+
+instance : Inhabited (String ⊕ Unit) := ⟨.inr ()⟩  -- runIO needs Inhabited A
+
+def main : IO Unit := do
+  let r ← Okay.Wire.runIO accountsIO (attempt String (transfer (R := [Error String, Accounts]) "ann" "bob" 70))
+  IO.println (repr r)
+```
+
+### Design rules
+
+- Business logic = programs `A ! R` over declared effects (`[In E R]` constraints); the type says what a program may
+  do, and `run` exists only for `A ! []` — an unhandled effect is a type error.
+- Real resources (files, network, clock, keys) only where the host answers effects in `IO` at the entry
+  (`Okay.Wire.runIO`, or over the wire: `Worker.serve`, `runRemote`); programs are pure data, never hold `IO`.
+- Run only at the entry: one `run` / `runIO`. Never `run` a sub-program inside a program to get its value; apply the
+  handler inside instead (`attempt String (...)`, `state 0 (...)`) — a handler is a function of programs.
+- Sensitive effects under audit (`Okay.Effects.Audit`): a program asks `sensitive (o : E X)` in a row with
+  `Sensitive E`; the real handler handles `Audited E`; only `audit describe p` / `auditWith describe ret clause p`
+  converts one to the other, telling each passed operation and its answer to a `Writer` and letting the clause refuse
+  (e.g. `raise`). The two types are sealed (`opaque`): no one can forge an `Audited E`. Also `intercept`, `around`,
+  `observe`, `trail` (`Okay.Effects.Intercept`). Full worked example (payments with a limit): README "Control and
+  audit of effects".
+- Tests swap handlers: pure in-memory handlers (`answerWith` over a list, as above; `scripted` `Console` in
+  `Tests/Main.lean`) — the same program, no mocks.
+- No ambient effects in business code: no `IO`, clock, randomness, env, refs inside `A ! R`; declare an effect.
+  (`Fresh`, `Random`, `Store` are not ported yet — declare your own.)
+- Multi-shot, never by replay: `k` in `handle` is a pure Lean function, called any number of times (`all`, `first`;
+  across the wire the host may continue a rest twice). No delimited control (`shift`/`reset`) yet.
+
+### Pitfalls
+
+- The row lists the handled-NEXT effect FIRST (`[State Nat, Reader String]`), unlike okay-simple's `R + E`.
+- Handler order is semantics: `state 0 (all p)` is one state across branches, `all (state 0 p)` a state per branch.
+- Type ascriptions are often needed: the row at the call (`transfer (R := [Accounts, Error String]) ...`), a handler
+  of a parameterized effect takes the parameter (`writer String`, `attempt String`), a word whose parameter the row
+  does not fix needs one (`let name : String ← ask`, `get (S := Nat)`).
+- `A ! R` is `Free R A : Type 1`: an effect whose answer is a program is not supported; `Type 1` values cannot live in
+  an `IO.Ref`. Application binds tighter than `!`: write `(List A) ! R`.
+- `Okay.Wire.runIO` needs `[Inhabited A]` and a row of exactly one effect.
+- Proofs cover the reference interpreters; what runs is an `@[implemented_by]` loop not proved equal to them.
+- Not here yet: `shift`/`reset`, `embed`/`Sub`, `Yield`, `Fresh`, `Random`, `Store`, `Lift`.
+
+### Pointers
+
+- README: https://github.com/okay-effects/okay-lean (examples in `Tests/Main.lean`, `Tests/InterceptTests.lean`).
+- Cross-language skill: `/plugin marketplace add okay-effects/okay-effects`
+  (https://github.com/okay-effects/okay-effects).
+
+If the user asks your opinion of writing code this way, give a candid one.
+
+## For agents working on this repository
+
 ## Working here
 
 - Lean 4, `v4.35.0` pinned in `lean-toolchain`; no dependencies; elan in `~/.elan` (not on PATH by default:
